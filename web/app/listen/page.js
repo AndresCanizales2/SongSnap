@@ -12,6 +12,7 @@ import PlayerPanel from "@/components/PlayerPanel";
 import PlayAllButton from "@/components/PlayAllButton";
 import ExportButtons from "@/components/ExportButtons";
 import SpotifyPanel from "@/components/SpotifyPanel";
+import YouTubePanel from "@/components/YouTubePanel";
 
 export default function ListenPage() {
   const router = useRouter();
@@ -24,10 +25,13 @@ export default function ListenPage() {
     renamePlaylist,
     removeSong,
     addSong,
+    notify,
   } = useRadar();
   const { currentSongId } = usePlayer();
   const [showSpotify, setShowSpotify] = useState(false);
   const [spotify, setSpotify] = useState({ configured: false, connected: false });
+  const [showYoutube, setShowYoutube] = useState(false);
+  const [youtube, setYoutube] = useState({ configured: false, connected: false });
 
   // Nothing to listen into means back to the opening screen.
   useEffect(() => {
@@ -65,18 +69,19 @@ export default function ListenPage() {
             <ExportButtons
               playlist={active}
               onNeedsSpotify={() => setShowSpotify(true)}
+              onNeedsYouTube={() => setShowYoutube(true)}
             />
           </div>
         </div>
 
         <PlayerPanel />
 
+        {showYoutube ? (
+          <YouTubePanel status={youtube} setStatus={setYoutube} notify={notify} />
+        ) : null}
+
         {showSpotify ? (
-          <SpotifyPanel
-            status={spotify}
-            setStatus={setSpotify}
-            notify={(m, bad) => console.log(m, bad)}
-          />
+          <SpotifyPanel status={spotify} setStatus={setSpotify} notify={notify} />
         ) : null}
 
         {songs.length === 0 ? (

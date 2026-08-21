@@ -11,6 +11,7 @@ import PlayerPanel from "@/components/PlayerPanel";
 import PlayAllButton from "@/components/PlayAllButton";
 import ExportButtons from "@/components/ExportButtons";
 import SpotifyPanel from "@/components/SpotifyPanel";
+import YouTubePanel from "@/components/YouTubePanel";
 
 function PlaylistView() {
   const id = useSearchParams().get("id");
@@ -27,6 +28,8 @@ function PlaylistView() {
   const { currentSongId } = usePlayer();
   const [showSpotify, setShowSpotify] = useState(false);
   const [spotify, setSpotify] = useState({ configured: false, connected: false });
+  const [showYoutube, setShowYoutube] = useState(false);
+  const [youtube, setYoutube] = useState({ configured: false, connected: false });
 
   const playlist = playlists.find((pl) => pl.id === id);
 
@@ -73,6 +76,7 @@ function PlaylistView() {
           <ExportButtons
             playlist={playlist}
             onNeedsSpotify={() => setShowSpotify(true)}
+            onNeedsYouTube={() => setShowYoutube(true)}
           />
         </div>
       </div>
@@ -84,6 +88,10 @@ function PlaylistView() {
           Listen into this playlist
         </button>
       )}
+
+      {showYoutube ? (
+        <YouTubePanel status={youtube} setStatus={setYoutube} notify={notify} />
+      ) : null}
 
       {showSpotify ? (
         <SpotifyPanel status={spotify} setStatus={setSpotify} notify={notify} />

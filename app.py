@@ -466,6 +466,280 @@ def capture_cycles(sources, sample_width, cycle_started):
             time.sleep(1)
 
 
+# -- YouTube account ----------------------------------------------------------
+# The temporary watch_videos links above need no account and cannot be kept.
+# Saving a real playlist means the YouTube Data API, which means Google OAuth.
+#
+# Google, unlike Spotify, wants a client secret even with PKCE, so both halves
+# live in youtube.json beside the app. PKCE is used anyway: it costs nothing
+# and the authorization code is useless to anyone who intercepts it.
+YOUTUBE_CONFIG_FILE = os.path.join(data_dir(), "youtube.json")
+YOUTUBE_REDIRECT_URI = f"http://127.0.0.1:{PORT}/youtube/callback"
+YOUTUBE_SCOPE = "https://www.googleapis.com/auth/youtube"
+GOOGLE_AUTH = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
+YOUTUBE_API = "https://www.googleapis.com/youtube/v3"
+
+# playlists.insert and every playlistItems.insert cost 50 units of the 10,000
+# a day a new project gets, so roughly 195 songs a day in total.
+YOUTUBE_UNITS_PER_INSERT = 50
+
+youtube_config: dict = {}
+_youtube_token = {"access_token": "", "expires_at": 0.0}
+_youtube_pending: dict[str, str] = {}
+_youtube_lock = threading.Lock()
+
+
+def load_youtube_config():
+    global youtube_config
+    try:
+        with open(YOUTUBE_CONFIG_FILE, encoding="utf-8") as f:
+            youtube_config = json.load(f)
+    except FileNotFoundError:
+        youtube_config = {}
+    except Exception as e:
+        print(f"  Could not read {os.path.basename(YOUTUBE_CONFIG_FILE)}: {e}", flush=True)
+        youtube_config = {}
+
+    for key, variable in (("client_id", "YOUTUBE_CLIENT_ID"), ("client_secret", "YOUTUBE_CLIENT_SECRET")):
+        value = os.environ.get(variable, "").strip()
+        if value:
+            youtube_config[key] = value
+
+    if youtube_config.get("client_id"):
+        state = "connected" if youtube_config.get("refresh_token") else "not connected yet"
+        print(f"  YouTube account: credentials set, {state}", flush=True)
+
+
+def save_youtube_config():
+    """Holds a refresh token and a client secret: same care as the rest."""
+    tmp = YOUTUBE_CONFIG_FILE + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(youtube_config, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, YOUTUBE_CONFIG_FILE)
+    except Exception as e:
+        print(f"  Could not save the YouTube config: {e}", flush=True)
+
+
+def youtube_login_url() -> str | None:
+    client_id = youtube_config.get("client_id")
+    if not client_id:
+        return None
+
+    verifier = base64.urlsafe_b64encode(os.urandom(48)).decode().rstrip("=")
+    challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(verifier.encode("ascii")).digest()
+    ).decode().rstrip("=")
+    state = new_id()
+    with _youtube_lock:
+        _youtube_pending.clear()
+        _youtube_pending[state] = verifier
+
+    query = urllib.parse.urlencode(
+        {
+            "client_id": client_id,
+            "redirect_uri": YOUTUBE_REDIRECT_URI,
+            "response_type": "code",
+            "scope": YOUTUBE_SCOPE,
+            # offline + consent is what makes Google hand back a refresh token.
+            "access_type": "offline",
+            "prompt": "consent",
+            "code_challenge_method": "S256",
+            "code_challenge": challenge,
+            "state": state,
+        }
+    )
+    return f"{GOOGLE_AUTH}?{query}"
+
+
+def youtube_exchange_code(code: str, state: str) -> str:
+    """Swap the callback code for tokens. Returns an error message, or ''."""
+    with _youtube_lock:
+        verifier = _youtube_pending.pop(state, None)
+    if not verifier:
+        return "This login link is no longer valid. Start the connection again."
+
+    try:
+        resp = requests.post(
+            GOOGLE_TOKEN,
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": YOUTUBE_REDIRECT_URI,
+                "client_id": youtube_config.get("client_id", ""),
+                "client_secret": youtube_config.get("client_secret", ""),
+                "code_verifier": verifier,
+            },
+            timeout=20,
+        )
+        data = resp.json()
+    except Exception as e:
+        return f"Could not reach Google: {e}"
+
+    if "refresh_token" not in data:
+        detail = data.get("error_description") or data.get("error") or ""
+        if data.get("access_token"):
+            detail = detail or (
+                "Google returned no refresh token. Remove SongRadar from your "
+                "Google account's third-party access and connect again."
+            )
+        return detail or "Google refused the login."
+
+    youtube_config["refresh_token"] = data["refresh_token"]
+    _youtube_token["access_token"] = data.get("access_token", "")
+    _youtube_token["expires_at"] = time.time() + data.get("expires_in", 3600) - 60
+
+    channel = youtube_get("/channels", {"part": "snippet", "mine": "true"})
+    items = (channel or {}).get("items", [])
+    if items:
+        youtube_config["channel"] = items[0]["snippet"].get("title", "")
+    save_youtube_config()
+    return ""
+
+
+def youtube_access_token() -> str | None:
+    if _youtube_token["access_token"] and time.time() < _youtube_token["expires_at"]:
+        return _youtube_token["access_token"]
+
+    refresh_token = youtube_config.get("refresh_token")
+    if not (refresh_token and youtube_config.get("client_id")):
+        return None
+
+    try:
+        resp = requests.post(
+            GOOGLE_TOKEN,
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "client_id": youtube_config.get("client_id", ""),
+                "client_secret": youtube_config.get("client_secret", ""),
+            },
+            timeout=20,
+        )
+        data = resp.json()
+    except Exception as e:
+        print(f"  YouTube token refresh failed: {e}", flush=True)
+        return None
+
+    if "access_token" not in data:
+        print(f"  YouTube token refresh rejected: {data.get('error_description', data)}", flush=True)
+        return None
+
+    _youtube_token["access_token"] = data["access_token"]
+    _youtube_token["expires_at"] = time.time() + data.get("expires_in", 3600) - 60
+    return _youtube_token["access_token"]
+
+
+def google_error(resp) -> str:
+    """Google's own words, which name the quota when that is the problem."""
+    try:
+        error = resp.json().get("error", {})
+        message = error.get("message", "")
+        reasons = [e.get("reason", "") for e in error.get("errors", [])]
+    except Exception:
+        message, reasons = (resp.text or "").strip()[:200], []
+
+    if "quotaExceeded" in reasons or "quota" in message.lower():
+        return (
+            "YouTube's daily quota is spent. A project gets 10,000 units a day "
+            "and each song costs 50, so about 195 songs. It resets at midnight "
+            "Pacific time."
+        )
+    return f"YouTube says: {message}" if message else f"YouTube replied {resp.status_code}."
+
+
+def youtube_get(path: str, params: dict, token: str | None = None):
+    token = token or _youtube_token["access_token"]
+    try:
+        resp = requests.get(
+            YOUTUBE_API + path,
+            params=params,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=20,
+        )
+        return resp.json() if resp.status_code < 400 else None
+    except Exception as e:
+        print(f"  YouTube GET {path} failed: {e}", flush=True)
+        return None
+
+
+def youtube_save_playlist(playlist: dict) -> dict:
+    """Create a real playlist on the account and fill it, in order."""
+    token = youtube_access_token()
+    if not token:
+        return {"error": "YouTube is not connected."}
+
+    queries = [f"{s['artist']} {s['title']}".strip() for s in playlist["songs"]]
+    ids, missing = resolve_video_ids(queries)
+    if not ids:
+        return {"error": "No song of this playlist could be found on YouTube."}
+
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        created = requests.post(
+            f"{YOUTUBE_API}/playlists",
+            params={"part": "snippet,status"},
+            headers=headers,
+            json={
+                "snippet": {"title": playlist["name"], "description": "Created by SongRadar"},
+                "status": {"privacyStatus": "private"},
+            },
+            timeout=25,
+        )
+    except Exception as e:
+        return {"error": f"Could not create the playlist: {e}"}
+
+    if created.status_code >= 400:
+        return {"error": google_error(created)}
+
+    playlist_id = created.json().get("id")
+    if not playlist_id:
+        return {"error": "YouTube did not return a playlist id."}
+
+    # One request per song, in order, so the playlist reads as the list does.
+    added = 0
+    for video_id in ids:
+        try:
+            item = requests.post(
+                f"{YOUTUBE_API}/playlistItems",
+                params={"part": "snippet"},
+                headers=headers,
+                json={
+                    "snippet": {
+                        "playlistId": playlist_id,
+                        "resourceId": {"kind": "youtube#video", "videoId": video_id},
+                    }
+                },
+                timeout=25,
+            )
+        except Exception as e:
+            return {
+                "url": f"https://www.youtube.com/playlist?list={playlist_id}",
+                "added": added,
+                "total": len(queries),
+                "missing": missing,
+                "error": f"Stopped after {added} songs: {e}",
+            }
+
+        if item.status_code >= 400:
+            return {
+                "url": f"https://www.youtube.com/playlist?list={playlist_id}",
+                "added": added,
+                "total": len(queries),
+                "missing": missing,
+                "error": google_error(item),
+            }
+        added += 1
+
+    return {
+        "url": f"https://www.youtube.com/playlist?list={playlist_id}",
+        "added": added,
+        "total": len(queries),
+        "missing": missing,
+    }
+
+
 # -- Spotify ------------------------------------------------------------------
 # Creating a playlist in someone's account needs their authorization, so this
 # runs the Authorization Code flow with PKCE: the user logs in on Spotify's own
@@ -920,6 +1194,7 @@ async def lifespan(app):
     _loop = asyncio.get_event_loop()
     load_playlists()
     load_spotify_config()
+    load_youtube_config()
     load_video_cache()
     thread = threading.Thread(target=audio_capture_loop, daemon=True)
     thread.start()
@@ -1048,6 +1323,93 @@ SPOTIFY_CALLBACK_PAGE = """<!DOCTYPE html>
 </html>"""
 
 
+# -- YouTube account endpoints ------------------------------------------------
+@app.get("/youtube/status")
+async def youtube_status():
+    return {
+        "configured": bool(youtube_config.get("client_id") and youtube_config.get("client_secret")),
+        "connected": bool(youtube_config.get("refresh_token")),
+        "channel": youtube_config.get("channel", ""),
+        "redirect_uri": YOUTUBE_REDIRECT_URI,
+    }
+
+
+@app.post("/youtube/config")
+async def set_youtube_config(payload: dict = Body(...)):
+    client_id = str(payload.get("client_id", "")).strip()
+    client_secret = str(payload.get("client_secret", "")).strip()
+    if not client_id or not client_secret:
+        return {"error": "Google needs both the client id and the client secret."}
+
+    youtube_config["client_id"] = client_id
+    youtube_config["client_secret"] = client_secret
+    # Different credentials mean the old authorization is worthless.
+    youtube_config.pop("refresh_token", None)
+    youtube_config.pop("channel", None)
+    _youtube_token["access_token"] = ""
+    save_youtube_config()
+    return {"configured": True, "connected": False}
+
+
+@app.post("/youtube/disconnect")
+async def youtube_disconnect():
+    youtube_config.pop("refresh_token", None)
+    youtube_config.pop("channel", None)
+    _youtube_token["access_token"] = ""
+    _youtube_token["expires_at"] = 0.0
+    save_youtube_config()
+    return {"connected": False}
+
+
+@app.get("/youtube/login")
+async def youtube_login():
+    url = youtube_login_url()
+    if not url:
+        return {"error": "Set your Google client id and secret first."}
+    return RedirectResponse(url)
+
+
+@app.get("/youtube/callback")
+async def youtube_callback(code: str = "", state: str = "", error: str = ""):
+    if error:
+        return HTMLResponse(callback_page("YouTube was not connected", error, ok=False))
+    if not code or not state:
+        return HTMLResponse(
+            callback_page("YouTube was not connected", "The callback was incomplete.", ok=False)
+        )
+
+    problem = await asyncio.to_thread(youtube_exchange_code, code, state)
+    if problem:
+        return HTMLResponse(callback_page("YouTube was not connected", problem, ok=False))
+
+    channel = youtube_config.get("channel", "")
+    return HTMLResponse(
+        callback_page(
+            "YouTube connected",
+            f"Signed in as {channel}. You can close this tab and go back to SongRadar."
+            if channel
+            else "You can close this tab and go back to SongRadar.",
+            ok=True,
+        )
+    )
+
+
+@app.post("/playlists/{playlist_id}/youtube-save")
+async def playlist_youtube_save(playlist_id: str):
+    """Create the playlist on the account, for keeps."""
+    playlist = find_playlist(playlist_id)
+    if not playlist:
+        return {"error": "Playlist not found."}
+    if not playlist["songs"]:
+        return {"error": "This playlist is empty."}
+    if not youtube_config.get("client_id"):
+        return {"error": "Set your Google client id and secret first."}
+    if not youtube_config.get("refresh_token"):
+        return {"error": "Connect YouTube first."}
+
+    return await asyncio.to_thread(youtube_save_playlist, playlist)
+
+
 # -- Spotify endpoints --------------------------------------------------------
 @app.get("/spotify/status")
 async def spotify_status():
@@ -1116,7 +1478,7 @@ async def spotify_callback(code: str = "", state: str = "", error: str = ""):
     )
 
 
-def callback_page(title: str, message: str, ok: bool) -> str:
+def callback_page(title: str, message: str, ok: bool) -> str:  # noqa: E302
     return (
         SPOTIFY_CALLBACK_PAGE.replace("__TITLE__", title)
         .replace("__MESSAGE__", message)

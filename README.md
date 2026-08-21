@@ -117,7 +117,7 @@ The player sits above the list, shows `3/12` and the song's name, and highlights
 | Add the song playing now to a playlist | **Add to playlist**, next to its name |
 | Remove a song | the **×** on its row |
 | Copy a playlist as text | **Copy** |
-| Send it to YouTube | **YouTube** |
+| Send it to YouTube | **YouTube** — a temporary list, or a real saved playlist once an account is connected |
 | Send it to Spotify | **Spotify** (see below) |
 | Stop filling a playlist | **Stop collecting** |
 
@@ -131,6 +131,32 @@ set SONGRADAR_SOURCES=mic      # microphone only
 ```
 
 > If your microphone hears your speakers, the mic attempt already matches whatever the PC plays, just through a worse channel. `SONGRADAR_SOURCES=system` skips to the clean source and halves the time per cycle.
+
+---
+
+## Connecting a YouTube account
+
+Without this, the **YouTube** button opens throwaway lists that YouTube usually will not let you keep. Connect an account and the same button creates the playlist **for real**, private, on your channel.
+
+It is free and needs no Premium — only a Google Cloud project, once:
+
+1. Press the **⚙** next to the YouTube button.
+2. Create a project in [Google Cloud](https://console.cloud.google.com/projectcreate).
+3. Enable [YouTube Data API v3](https://console.cloud.google.com/apis/library/youtube.googleapis.com).
+4. On the OAuth consent screen choose **External** and add your own Google address as a **test user**.
+5. Create an **OAuth client ID** of type **Web application** with this redirect URI: `http://127.0.0.1:8000/youtube/callback`
+6. Paste the **Client ID** and **Client secret** into SongRadar, press **Save**, then **Connect YouTube**.
+
+Google asks for a client secret even with PKCE, unlike Spotify. Both halves are stored in `youtube.json` beside the app and never leave the machine — treat that file like a password. **Disconnect** removes the authorization.
+
+Two things Google does that are worth knowing before you start:
+
+| | |
+|---|---|
+| **"This app isn't verified"** | Expected: it is your own app, used by you. Choose **Advanced → Go to SongRadar**. Verification is only needed to publish an app to strangers. |
+| **The authorization expires after 7 days** | While the project is in *Testing*, Google expires refresh tokens weekly. SongRadar then says so and you press **Connect YouTube** again. Publishing the project (still unverified) stops the expiry. |
+
+**Quota.** A project gets 10,000 units a day, and each song inserted costs 50, so about **195 songs a day**. Saving a 117-song playlist uses most of it. When it runs out SongRadar says so, names the quota, and tells you it resets at midnight Pacific time.
 
 ---
 
