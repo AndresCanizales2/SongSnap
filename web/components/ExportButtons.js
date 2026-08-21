@@ -1,22 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api, apiText, copyToClipboard } from "@/lib/api";
 import { useRadar } from "@/lib/RadarContext";
 
 /** Copy / YouTube / Spotify for one playlist, shown above its songs. */
-export default function ExportButtons({ playlist, onNeedsSpotify, onNeedsYouTube }) {
+export default function ExportButtons({
+  playlist,
+  youtube = { configured: false, connected: false },
+  onNeedsSpotify,
+  onNeedsYouTube,
+}) {
   const { notify } = useRadar();
   const [busy, setBusy] = useState("");
-  const [youtube, setYoutube] = useState({ configured: false, connected: false });
-
-  // Connected to an account? Then the button saves for keeps instead of
-  // opening a link YouTube will not let you keep.
-  useEffect(() => {
-    api("/youtube/status")
-      .then(setYoutube)
-      .catch(() => {});
-  }, []);
 
   async function copy() {
     const text = await apiText(`/playlists/${playlist.id}/text`);

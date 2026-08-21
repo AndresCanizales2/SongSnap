@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { api } from "@/lib/api";
 import { useRadar } from "@/lib/RadarContext";
 import { usePlayer } from "@/lib/PlayerContext";
 import NowPlaying from "@/components/NowPlaying";
@@ -32,6 +33,14 @@ export default function ListenPage() {
   const [spotify, setSpotify] = useState({ configured: false, connected: false });
   const [showYoutube, setShowYoutube] = useState(false);
   const [youtube, setYoutube] = useState({ configured: false, connected: false });
+
+  // Read once here and refreshed by the panel, so connecting an account
+  // immediately changes what the YouTube button does.
+  useEffect(() => {
+    api("/youtube/status")
+      .then(setYoutube)
+      .catch(() => {});
+  }, []);
 
   // Nothing to listen into means back to the opening screen.
   useEffect(() => {
@@ -68,6 +77,7 @@ export default function ListenPage() {
             <PlayAllButton playlist={active} />
             <ExportButtons
               playlist={active}
+              youtube={youtube}
               onNeedsSpotify={() => setShowSpotify(true)}
               onNeedsYouTube={() => setShowYoutube(true)}
             />

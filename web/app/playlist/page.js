@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { api } from "@/lib/api";
 import { useRadar } from "@/lib/RadarContext";
 import { usePlayer } from "@/lib/PlayerContext";
 import EditableName from "@/components/EditableName";
@@ -30,6 +31,14 @@ function PlaylistView() {
   const [spotify, setSpotify] = useState({ configured: false, connected: false });
   const [showYoutube, setShowYoutube] = useState(false);
   const [youtube, setYoutube] = useState({ configured: false, connected: false });
+
+  // Read once here and refreshed by the panel, so connecting an account
+  // immediately changes what the YouTube button does.
+  useEffect(() => {
+    api("/youtube/status")
+      .then(setYoutube)
+      .catch(() => {});
+  }, []);
 
   const playlist = playlists.find((pl) => pl.id === id);
 
@@ -75,6 +84,7 @@ function PlaylistView() {
           <PlayAllButton playlist={playlist} />
           <ExportButtons
             playlist={playlist}
+            youtube={youtube}
             onNeedsSpotify={() => setShowSpotify(true)}
             onNeedsYouTube={() => setShowYoutube(true)}
           />
