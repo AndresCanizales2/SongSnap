@@ -1,5 +1,9 @@
 fastapi==0.115.12
 uvicorn==0.34.0
+websockets==14.2
 pyaudiowpatch==0.2.12.6
 numpy==2.2.4
-ShazamAPI==0.6.1
+pydub==0.25.1
+requests==2.34.2
+# ShazamAPI is not published on PyPI at this version; install from the source repo
+ShazamAPI @ git+https://github.com/Numenorean/ShazamAPI.git@6d8932c57c724ecb2c1f68cecaacc399a11230c4
