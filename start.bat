@@ -2,8 +2,13 @@
 chcp 65001 >nul
 setlocal
 
-REM Runs SongRadar from source. If you only want to use it, grab SongRadar.exe
-REM from the releases instead: it needs nothing installed.
+REM Runs SongRadar from source, keeping its playlists in this folder.
+REM
+REM It deliberately ignores dist\SongRadar.exe even when you have built one:
+REM the packaged app keeps its data next to itself, so launching it from here
+REM would quietly swap your playlists for whatever lives in dist\.
+REM If you only want to use SongRadar, download SongRadar.exe from the
+REM releases and double-click that instead.
 
 set "ROOT=%~dp0"
 set "WEB=%ROOT%web"
@@ -11,12 +16,6 @@ set "WEB=%ROOT%web"
 echo.
 echo   === SongRadar ===
 echo.
-
-if exist "%ROOT%dist\SongRadar.exe" (
-    echo   Found the packaged build, starting that.
-    "%ROOT%dist\SongRadar.exe"
-    goto :eof
-)
 
 REM --- Python side -----------------------------------------------------------
 if not exist "%ROOT%.venv\Scripts\python.exe" (

@@ -39,6 +39,8 @@ start.bat
 
 `start.bat` creates the virtual environment, installs the dependencies, builds the interface the first time, and starts everything on `http://127.0.0.1:8000`.
 
+> **Where your playlists live.** Running from source keeps them in this folder. The packaged `SongRadar.exe` keeps them next to the exe instead, so it stays portable. `start.bat` always runs from source, even if you have built an exe, so your playlists do not change under you depending on how you started it. To move them, copy `playlists.json` across.
+
 ### Building the .exe yourself
 
 ```bash
