@@ -108,8 +108,10 @@ export default function YouTubePanel({ status, setStatus, notify }) {
               </a>
             </li>
             <li>
-              On the OAuth consent screen, pick <b>External</b> and add your own
-              Google address as a <b>test user</b>
+              On the OAuth consent screen pick <b>External</b>, then open{" "}
+              <b>Audience</b> and add your own Google address under{" "}
+              <b>Test users</b>. Skipping this is what makes Google answer{" "}
+              <i>Error 403: access_denied</i>.
             </li>
             <li>
               Create an <b>OAuth client ID</b> of type <b>Web application</b>{" "}
@@ -148,7 +150,9 @@ export default function YouTubePanel({ status, setStatus, notify }) {
             Google will warn that the app is not verified — it is your own app,
             so choose <b>Advanced → Go to SongRadar</b>. While the project stays
             in testing, Google expires the authorization after 7 days and you
-            reconnect with one click.
+            reconnect with one click. Pressing <b>Publish app</b> on the
+            Audience page keeps the warning but stops the weekly expiry, and
+            lets any Google account in without the test user list.
           </p>
         </>
       ) : (

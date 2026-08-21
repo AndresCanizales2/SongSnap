@@ -1382,10 +1382,32 @@ async def youtube_login():
     return RedirectResponse(url)
 
 
+def google_denied_reason(error: str) -> str:
+    """Google's error codes are short. These are the ones people actually hit."""
+    if error == "access_denied":
+        return (
+            "Google blocked the sign-in. While the project is in Testing, only "
+            "accounts listed as test users may sign in: open the Google Cloud "
+            "console, go to APIs and Services, OAuth consent screen, Audience, "
+            "and add your own Google address under Test users. Then press "
+            "Connect YouTube again. Publishing the project does the same and "
+            "also stops the authorization expiring every 7 days."
+        )
+    if error == "redirect_uri_mismatch":
+        return (
+            "The redirect URI registered in Google Cloud does not match the one "
+            "SongRadar uses. It has to be exactly "
+            f"{YOUTUBE_REDIRECT_URI}"
+        )
+    return error
+
+
 @app.get("/youtube/callback")
 async def youtube_callback(code: str = "", state: str = "", error: str = ""):
     if error:
-        return HTMLResponse(callback_page("YouTube was not connected", error, ok=False))
+        return HTMLResponse(
+            callback_page("YouTube was not connected", google_denied_reason(error), ok=False)
+        )
     if not code or not state:
         return HTMLResponse(
             callback_page("YouTube was not connected", "The callback was incomplete.", ok=False)

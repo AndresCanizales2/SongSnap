@@ -143,7 +143,7 @@ It is free and needs no Premium — only a Google Cloud project, once:
 1. Press the **⚙** next to the YouTube button.
 2. Create a project in [Google Cloud](https://console.cloud.google.com/projectcreate).
 3. Enable [YouTube Data API v3](https://console.cloud.google.com/apis/library/youtube.googleapis.com).
-4. On the OAuth consent screen choose **External** and add your own Google address as a **test user**.
+4. On the OAuth consent screen choose **External**, then open **Audience** and add your own Google address under **Test users**. Skipping this is what makes Google answer `Error 403: access_denied` later.
 5. Create an **OAuth client ID** of type **Web application** with this redirect URI: `http://127.0.0.1:8000/youtube/callback`
 6. Paste the **Client ID** and **Client secret** into SongRadar, press **Save**, then **Connect YouTube**.
 
@@ -156,7 +156,8 @@ Two things Google does that are worth knowing before you start:
 | | |
 |---|---|
 | **"This app isn't verified"** | Expected: it is your own app, used by you. Choose **Advanced → Go to SongRadar**. Verification is only needed to publish an app to strangers. |
-| **The authorization expires after 7 days** | While the project is in *Testing*, Google expires refresh tokens weekly. SongRadar then says so and you press **Connect YouTube** again. Publishing the project (still unverified) stops the expiry. |
+| **The authorization expires after 7 days** | While the project is in *Testing*, Google expires refresh tokens weekly. SongRadar then says so and you press **Connect YouTube** again. **Publish app** on the Audience page stops the expiry, keeps the unverified warning, and removes the need for the test user list. |
+| **`Error 403: access_denied`** | The project is in Testing and the account signing in is not one of its test users. Add it under **Audience → Test users**, or publish the app. SongRadar spells this out on the failure page rather than showing the bare code. |
 
 **Quota.** A project gets 10,000 units a day, and each song inserted costs 50, so about **195 songs a day**. Saving a 117-song playlist uses most of it. When it runs out SongRadar says so, names the quota, and tells you it resets at midnight Pacific time.
 
