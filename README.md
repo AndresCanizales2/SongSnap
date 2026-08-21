@@ -101,7 +101,11 @@ It exports the interface with Next.js and bundles it with PyInstaller into `dist
 
 **▶ Play all** at the top of a playlist plays every song in order in an embedded YouTube player. The ▶ on a single song starts the player there and **keeps going with the rest of the list**.
 
-The queue rides in the embed URL, so it holds up to 200 songs; the YouTube **export** link is the one capped at 50, and both say so when something is left out. Each song's video is looked up once and remembered in `videos.json`, and SongRadar resolves it in the background as soon as it recognizes the song, so pressing play on a long playlist is instant rather than a wait.
+**There is no limit on how many songs play.** The queue travels inside the embed URL — a hundred songs is about 1.4 KB of it — so the whole playlist goes in, however long it grows.
+
+Each song's video is looked up once and kept in `videos.json`, and SongRadar resolves it in the background the moment it recognizes the song. Pressing play on a long playlist is then instant: a 117-song list queues in 0.02s.
+
+The **export** to YouTube is the one place a limit exists, and it is YouTube's, not SongRadar's: one `watch_videos` link holds exactly 50 songs. Measured, not assumed — send 60, 80 or 117 ids and the list that comes back still reports `totalVideos: 50`, dropping the rest without a word. So a longer playlist is exported as **several lists of 50**, each opening in its own tab, and nothing is left behind.
 
 The player sits above the list, shows `3/12` and the song's name, and highlights the row that is playing. Only one player exists in the page.
 
@@ -161,6 +165,8 @@ If it is empty, no capture device was found. If `collecting` is empty, nothing i
 **A song never matches.** Fingerprinting needs the recording it knows. Covers, live versions, remixes and self-released tracks often are not in the database. The window is skipped and the next one is tried.
 
 **The playlist will not save on YouTube.** These are temporary, unlisted lists. YouTube decides whether it offers to keep one, and lately often does not. A permanent playlist would need the YouTube Data API behind a Google OAuth app, which SongRadar does not use.
+
+**YouTube opened several tabs.** That is a playlist of more than 50 songs: one link cannot hold more, so it is split. Playback is not split — that plays the whole list in one go.
 
 **Port 8000 is taken.** `set SONGRADAR_PORT=8010` before starting. Note the Spotify redirect URI is tied to 8000, so change it in the Spotify dashboard too if you use Spotify.
 
