@@ -216,10 +216,16 @@ Your audio never leaves the machine. What is sent for recognition is a *fingerpr
 
 This project uses [ShazamAPI](https://github.com/Numenorean/ShazamAPI), an **unofficial, reverse-engineered** library not affiliated with or endorsed by Shazam Entertainment Ltd. or Apple Inc. YouTube video ids are read from the public search page. Neither is a supported interface, so either can break without warning.
 
-SongRadar is an independent open-source project for **personal, non-commercial use**. All song metadata and recognition results come from third-party services.
+SongRadar is an independent, source-available project for **personal, noncommercial use**. All song metadata and recognition results come from third-party services.
 
 ---
 
 ## License
 
-MIT — free to use, modify and share.
+[**PolyForm Noncommercial 1.0.0**](https://polyformproject.org/licenses/noncommercial/1.0.0) — see [LICENSE](LICENSE).
+
+Read it, run it, change it, share it, fork it: all fine, for **any noncommercial purpose**. Personal use, study, research, and use inside a nonprofit or an educational institution are all covered explicitly.
+
+What is not allowed is commercial use — selling it, bundling it into a product, or running it as part of a business.
+
+> This is a **source-available** license, not an OSI open source one, so GitHub will show it as "unrecognized" and it is not compatible with open-source-only policies. That is the trade-off of the noncommercial condition.
