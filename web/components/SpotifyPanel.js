@@ -40,6 +40,13 @@ export default function SpotifyPanel({ status, setStatus, notify }) {
     setTimeout(refresh, 6000);
   }
 
+  async function forget() {
+    await api("/spotify/config", "DELETE");
+    setEditing(false);
+    await refresh();
+    notify("Credentials removed from this machine.");
+  }
+
   async function disconnect() {
     await api("/spotify/disconnect", "POST");
     await refresh();
@@ -113,6 +120,9 @@ export default function SpotifyPanel({ status, setStatus, notify }) {
           )}
           <button className="btn" onClick={() => setEditing(true)}>
             Change client id
+          </button>
+          <button className="btn" onClick={forget} title="Remove the client id from this machine">
+            Forget client id
           </button>
           {status.connected ? (
             <button className="btn" onClick={disconnect}>

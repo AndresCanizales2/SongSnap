@@ -50,6 +50,13 @@ export default function YouTubePanel({ status, setStatus, notify }) {
     setTimeout(refresh, 8000);
   }
 
+  async function forget() {
+    await api("/youtube/config", "DELETE");
+    setEditing(false);
+    await refresh();
+    notify("Credentials removed from this machine.");
+  }
+
   async function disconnect() {
     await api("/youtube/disconnect", "POST");
     await refresh();
@@ -153,6 +160,9 @@ export default function YouTubePanel({ status, setStatus, notify }) {
           )}
           <button className="btn" onClick={() => setEditing(true)}>
             Change credentials
+          </button>
+          <button className="btn" onClick={forget} title="Remove the credentials from this machine">
+            Forget credentials
           </button>
           {status.connected ? (
             <button className="btn" onClick={disconnect}>

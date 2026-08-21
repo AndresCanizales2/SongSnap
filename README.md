@@ -147,7 +147,9 @@ It is free and needs no Premium — only a Google Cloud project, once:
 5. Create an **OAuth client ID** of type **Web application** with this redirect URI: `http://127.0.0.1:8000/youtube/callback`
 6. Paste the **Client ID** and **Client secret** into SongRadar, press **Save**, then **Connect YouTube**.
 
-Google asks for a client secret even with PKCE, unlike Spotify. Both halves are stored in `youtube.json` beside the app and never leave the machine — treat that file like a password. **Disconnect** removes the authorization.
+Google asks for a client secret even with PKCE, unlike Spotify. Both halves are stored in `youtube.json` beside the app and never leave the machine — treat that file like a password. **Disconnect** removes the authorization; **Forget credentials** removes the id and secret as well.
+
+> **`Error 401: invalid_client`** on Google's page means the client id SongRadar sent is not one Google knows: a typo, a half-pasted id, or credentials from a different project. Press **Forget credentials**, then paste them again. A Google client id ends in `.apps.googleusercontent.com`.
 
 Two things Google does that are worth knowing before you start:
 

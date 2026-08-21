@@ -1361,6 +1361,19 @@ async def youtube_disconnect():
     return {"connected": False}
 
 
+@app.delete("/youtube/config")
+async def forget_youtube_config():
+    """Forget the credentials entirely, not just the authorization."""
+    youtube_config.clear()
+    _youtube_token["access_token"] = ""
+    _youtube_token["expires_at"] = 0.0
+    try:
+        os.remove(YOUTUBE_CONFIG_FILE)
+    except OSError:
+        pass
+    return {"configured": False, "connected": False}
+
+
 @app.get("/youtube/login")
 async def youtube_login():
     url = youtube_login_url()
@@ -1444,6 +1457,19 @@ async def spotify_disconnect():
     _spotify_token["expires_at"] = 0.0
     save_spotify_config()
     return {"connected": False}
+
+
+@app.delete("/spotify/config")
+async def forget_spotify_config():
+    """Forget the credentials entirely, not just the authorization."""
+    spotify_config.clear()
+    _spotify_token["access_token"] = ""
+    _spotify_token["expires_at"] = 0.0
+    try:
+        os.remove(SPOTIFY_CONFIG_FILE)
+    except OSError:
+        pass
+    return {"configured": False, "connected": False}
 
 
 @app.get("/spotify/login")
