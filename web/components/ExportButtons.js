@@ -22,14 +22,18 @@ export default function ExportButtons({ playlist, onNeedsSpotify }) {
     notify("Looking the songs up on YouTube...");
     try {
       const data = await api(`/playlists/${playlist.id}/youtube`, "POST");
-      if (data.url) {
-        if (tab) tab.location = data.url;
-        else window.open(data.url, "_blank");
-        let message = `Opened with ${data.found} of ${data.total} songs.`;
-        if (data.left_out) {
-          message += ` The other ${data.left_out} did not fit: a YouTube link carries 50.`;
-        }
-        notify(message + " Press Save on YouTube to keep it.");
+      if (data.urls?.length) {
+        if (tab) tab.location = data.urls[0];
+        else window.open(data.urls[0], "_blank");
+        // A YouTube link holds 50 songs, so a longer playlist arrives split.
+        for (const url of data.urls.slice(1)) window.open(url, "_blank");
+
+        let message =
+          data.urls.length > 1
+            ? `${data.found} songs opened as ${data.urls.length} YouTube lists of 50 — that is all one link holds.`
+            : `Opened with ${data.found} of ${data.total} songs.`;
+        if (data.missing?.length) message += ` Not found: ${data.missing.join(", ")}.`;
+        notify(message + " Press Save on YouTube to keep them.");
       } else {
         if (tab) tab.close();
         notify(data.error || "Could not build the playlist.", true);

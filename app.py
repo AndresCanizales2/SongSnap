@@ -736,12 +736,15 @@ def spotify_export(playlist: dict) -> dict:
 
 # -- YouTube playlist ---------------------------------------------------------
 # youtube.com/watch_videos?video_ids=... builds a throwaway playlist from video
-# ids, no account or API key involved. It caps out at 50 videos.
+# ids, no account or API key involved.
+#
+# YouTube keeps only the first 50 of them, measured: send 60, 80 or 117 and the
+# list that comes back still reports totalVideos 50. So a longer playlist is
+# split into one list per 50 and nothing is dropped.
+#
+# Playback has no limit at all: the queue travels inside the embed URL, and a
+# hundred songs is about 1.4 KB of it.
 WATCH_VIDEOS_LIMIT = 50
-
-# Playback has no such limit: the queue rides in the embed URL, so the only
-# real constraint is keeping that URL a sane length. 200 songs is about 2.5 KB.
-PLAYBACK_QUEUE_LIMIT = 200
 YOUTUBE_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -808,7 +811,7 @@ def youtube_video_id(query: str) -> str | None:
 
 
 def playlist_songs() -> list[dict]:
-    """History oldest first, one entry per song, capped to the URL limit."""
+    """History oldest first, one entry per song."""
     songs, seen = [], set()
     for song in reversed(song_history):
         key = (song.get("artist", "").lower(), song.get("title", "").lower())
@@ -816,7 +819,7 @@ def playlist_songs() -> list[dict]:
             continue
         seen.add(key)
         songs.append(song)
-    return songs[-WATCH_VIDEOS_LIMIT:]
+    return songs
 
 
 def youtube_playlist_page(watch_url: str) -> str:
@@ -853,13 +856,16 @@ def resolve_video_ids(queries: list[str]) -> tuple[list[str], list[str]]:
     return found, missing
 
 
-def build_playlist_url(queries: list[str]) -> tuple[str | None, list[str]]:
+def build_playlist_urls(queries: list[str]) -> tuple[list[str], list[str]]:
+    """One YouTube list per 50 songs, because that is all one link can hold."""
     found, missing = resolve_video_ids(queries)
-    if not found:
-        return None, missing
 
-    watch_url = "https://www.youtube.com/watch_videos?video_ids=" + ",".join(found)
-    return youtube_playlist_page(watch_url) or watch_url, missing
+    urls = []
+    for start in range(0, len(found), WATCH_VIDEOS_LIMIT):
+        chunk = found[start : start + WATCH_VIDEOS_LIMIT]
+        watch_url = "https://www.youtube.com/watch_videos?video_ids=" + ",".join(chunk)
+        urls.append(youtube_playlist_page(watch_url) or watch_url)
+    return urls, missing
 
 
 def collect_into_active(song: dict) -> bool:
@@ -1006,12 +1012,12 @@ async def youtube_playlist():
         return {"error": "No songs recognized yet."}
 
     queries = [f"{s.get('artist', '')} {s.get('title', '')}".strip() for s in songs]
-    url, missing = await asyncio.to_thread(build_playlist_url, queries)
-    if not url:
+    urls, missing = await asyncio.to_thread(build_playlist_urls, queries)
+    if not urls:
         return {"error": "No song could be found on YouTube."}
 
     return {
-        "url": url,
+        "urls": urls,
         "found": len(queries) - len(missing),
         "total": len(queries),
         "missing": missing,
@@ -1276,7 +1282,7 @@ async def playlist_videos(playlist_id: str):
     if not playlist["songs"]:
         return {"error": "This playlist is empty."}
 
-    songs = playlist["songs"][:PLAYBACK_QUEUE_LIMIT]
+    songs = playlist["songs"]
     queries = [f"{s['artist']} {s['title']}".strip() for s in songs]
     ids, missing = await asyncio.to_thread(resolve_video_ids, queries)
     if not ids:
@@ -1296,8 +1302,6 @@ async def playlist_videos(playlist_id: str):
         "found": len(queue),
         "total": len(queries),
         "missing": missing,
-        # Say so rather than quietly playing part of the playlist.
-        "left_out": max(0, len(playlist["songs"]) - len(songs)),
     }
 
 
@@ -1306,22 +1310,19 @@ async def playlist_youtube(playlist_id: str):
     playlist = find_playlist(playlist_id)
     if not playlist:
         return {"error": "Playlist not found."}
-    songs = playlist["songs"][:WATCH_VIDEOS_LIMIT]
-    left_out = max(0, len(playlist["songs"]) - len(songs))
+    songs = playlist["songs"]
     if not songs:
         return {"error": "This playlist is empty."}
 
     queries = [f"{s['artist']} {s['title']}".strip() for s in songs]
-    url, missing = await asyncio.to_thread(build_playlist_url, queries)
-    if not url:
+    urls, missing = await asyncio.to_thread(build_playlist_urls, queries)
+    if not urls:
         return {"error": "No song could be found on YouTube."}
     return {
-        "url": url,
+        "urls": urls,
         "found": len(queries) - len(missing),
         "total": len(queries),
         "missing": missing,
-        # A watch_videos link genuinely cannot carry more than 50.
-        "left_out": left_out,
     }
 
 
