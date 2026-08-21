@@ -25,9 +25,11 @@ export default function ExportButtons({ playlist, onNeedsSpotify }) {
       if (data.url) {
         if (tab) tab.location = data.url;
         else window.open(data.url, "_blank");
-        notify(
-          `Opened with ${data.found} of ${data.total} songs. Press Save on YouTube to keep it.`
-        );
+        let message = `Opened with ${data.found} of ${data.total} songs.`;
+        if (data.left_out) {
+          message += ` The other ${data.left_out} did not fit: a YouTube link carries 50.`;
+        }
+        notify(message + " Press Save on YouTube to keep it.");
       } else {
         if (tab) tab.close();
         notify(data.error || "Could not build the playlist.", true);

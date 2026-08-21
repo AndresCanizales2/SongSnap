@@ -65,7 +65,12 @@ export function PlayerProvider({ children }) {
       setQueue(data.queue);
       setStart(at);
       setIndex(at);
-      return { found: data.found, total: data.total, missing: data.missing };
+      return {
+        found: data.found,
+        total: data.total,
+        missing: data.missing,
+        leftOut: data.left_out,
+      };
     },
     [source, queue]
   );

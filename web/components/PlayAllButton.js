@@ -24,6 +24,9 @@ export default function PlayAllButton({ playlist }) {
     }
     if (result?.found) {
       let message = `Playing ${result.found} of ${result.total} songs.`;
+      if (result.leftOut) {
+        message += ` The last ${result.leftOut} are not queued: the player takes 200 at a time.`;
+      }
       if (result.missing?.length) message += ` Not on YouTube: ${result.missing.join(", ")}.`;
       notify(message);
     }

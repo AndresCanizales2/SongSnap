@@ -453,6 +453,14 @@ def capture_cycles(sources, sample_width, cycle_started):
                 if collect_into_active(current_song):
                     broadcast_playlists()
 
+                # Find its video now, in the background: by the time anyone
+                # presses play the whole playlist is already resolved.
+                threading.Thread(
+                    target=youtube_video_id,
+                    args=(f"{result['artist']} {result['title']}".strip(),),
+                    daemon=True,
+                ).start()
+
         except Exception as e:
             print(f"  Capture error: {e}", flush=True)
             time.sleep(1)
@@ -730,12 +738,44 @@ def spotify_export(playlist: dict) -> dict:
 # youtube.com/watch_videos?video_ids=... builds a throwaway playlist from video
 # ids, no account or API key involved. It caps out at 50 videos.
 WATCH_VIDEOS_LIMIT = 50
+
+# Playback has no such limit: the queue rides in the embed URL, so the only
+# real constraint is keeping that URL a sane length. 200 songs is about 2.5 KB.
+PLAYBACK_QUEUE_LIMIT = 200
 YOUTUBE_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
+# Looking a song up on YouTube takes a couple of seconds, so a hundred-song
+# playlist would stall on every restart. The answers do not change, so they are
+# kept on disk.
+VIDEO_CACHE_FILE = os.path.join(data_dir(), "videos.json")
 _video_id_cache: dict[str, str] = {}
 _video_id_lock = threading.Lock()
+
+
+def load_video_cache():
+    global _video_id_cache
+    try:
+        with open(VIDEO_CACHE_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        _video_id_cache = {k: v for k, v in data.items() if isinstance(v, str)}
+        print(f"  Video ids: {len(_video_id_cache)} cached", flush=True)
+    except FileNotFoundError:
+        _video_id_cache = {}
+    except Exception as e:
+        print(f"  Could not read the video cache: {e}", flush=True)
+        _video_id_cache = {}
+
+
+def save_video_cache():
+    tmp = VIDEO_CACHE_FILE + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(_video_id_cache, f, ensure_ascii=False, indent=0)
+        os.replace(tmp, VIDEO_CACHE_FILE)
+    except Exception as e:
+        print(f"  Could not save the video cache: {e}", flush=True)
 
 
 def youtube_video_id(query: str) -> str | None:
@@ -763,6 +803,7 @@ def youtube_video_id(query: str) -> str | None:
     video_id = match.group(1)
     with _video_id_lock:
         _video_id_cache[query] = video_id
+        save_video_cache()
     return video_id
 
 
@@ -802,7 +843,9 @@ def youtube_playlist_page(watch_url: str) -> str:
 
 def resolve_video_ids(queries: list[str]) -> tuple[list[str], list[str]]:
     """Video ids in the order asked for, plus the queries that found nothing."""
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    # Each lookup is a search page fetch, so a long playlist is worth widening
+    # for: 8 at a time keeps a hundred songs under a handful of seconds.
+    with ThreadPoolExecutor(max_workers=8) as pool:
         video_ids = list(pool.map(youtube_video_id, queries))
 
     found = [v for v in video_ids if v]
@@ -871,6 +914,7 @@ async def lifespan(app):
     _loop = asyncio.get_event_loop()
     load_playlists()
     load_spotify_config()
+    load_video_cache()
     thread = threading.Thread(target=audio_capture_loop, daemon=True)
     thread.start()
     # The interface lives on the web server, so that is what the browser opens.
@@ -1232,7 +1276,7 @@ async def playlist_videos(playlist_id: str):
     if not playlist["songs"]:
         return {"error": "This playlist is empty."}
 
-    songs = playlist["songs"][:WATCH_VIDEOS_LIMIT]
+    songs = playlist["songs"][:PLAYBACK_QUEUE_LIMIT]
     queries = [f"{s['artist']} {s['title']}".strip() for s in songs]
     ids, missing = await asyncio.to_thread(resolve_video_ids, queries)
     if not ids:
@@ -1247,7 +1291,14 @@ async def playlist_videos(playlist_id: str):
             continue
         queue.append({"song_id": song["id"], "video_id": next(found), "title": song["title"], "artist": song["artist"]})
 
-    return {"queue": queue, "found": len(queue), "total": len(queries), "missing": missing}
+    return {
+        "queue": queue,
+        "found": len(queue),
+        "total": len(queries),
+        "missing": missing,
+        # Say so rather than quietly playing part of the playlist.
+        "left_out": max(0, len(playlist["songs"]) - len(songs)),
+    }
 
 
 @app.post("/playlists/{playlist_id}/youtube")
@@ -1256,6 +1307,7 @@ async def playlist_youtube(playlist_id: str):
     if not playlist:
         return {"error": "Playlist not found."}
     songs = playlist["songs"][:WATCH_VIDEOS_LIMIT]
+    left_out = max(0, len(playlist["songs"]) - len(songs))
     if not songs:
         return {"error": "This playlist is empty."}
 
@@ -1263,7 +1315,14 @@ async def playlist_youtube(playlist_id: str):
     url, missing = await asyncio.to_thread(build_playlist_url, queries)
     if not url:
         return {"error": "No song could be found on YouTube."}
-    return {"url": url, "found": len(queries) - len(missing), "total": len(queries), "missing": missing}
+    return {
+        "url": url,
+        "found": len(queries) - len(missing),
+        "total": len(queries),
+        "missing": missing,
+        # A watch_videos link genuinely cannot carry more than 50.
+        "left_out": left_out,
+    }
 
 
 @app.delete("/history/{song_id}")

@@ -99,7 +99,9 @@ It exports the interface with Next.js and bundles it with PyInstaller into `dist
 
 ### Playing
 
-**▶ Play all** at the top of a playlist plays every song in order in an embedded YouTube player. The ▶ on a single song jumps the player to that song and **keeps going with the rest of the list** from there.
+**▶ Play all** at the top of a playlist plays every song in order in an embedded YouTube player. The ▶ on a single song starts the player there and **keeps going with the rest of the list**.
+
+The queue rides in the embed URL, so it holds up to 200 songs; the YouTube **export** link is the one capped at 50, and both say so when something is left out. Each song's video is looked up once and remembered in `videos.json`, and SongRadar resolves it in the background as soon as it recognizes the song, so pressing play on a long playlist is instant rather than a wait.
 
 The player sits above the list, shows `3/12` and the song's name, and highlights the row that is playing. Only one player exists in the page.
 
