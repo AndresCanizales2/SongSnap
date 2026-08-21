@@ -138,6 +138,8 @@ set SONGRADAR_SOURCES=mic      # microphone only
 
 Without this, the **YouTube** button opens throwaway lists that YouTube usually will not let you keep. Connect an account and the same button creates the playlist **for real**, private, on your channel.
 
+Press it again later and it does **not** make a second copy: it finds the playlist by name, reads what it already holds, and adds only the songs missing from it. That is also what keeps the quota alive — reading costs 1 unit a page, inserting costs 50 a song. On a 135-song playlist already up to date bar one track, that is the difference between 6,800 units and 50.
+
 It is free and needs no Premium — only a Google Cloud project, once:
 
 1. Press the **⚙** next to the YouTube button.

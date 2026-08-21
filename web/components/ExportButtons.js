@@ -27,8 +27,16 @@ export default function ExportButtons({
       const data = await api(`/playlists/${playlist.id}/youtube-save`, "POST");
       if (data.url) {
         window.open(data.url, "_blank");
-        let message = `Saved ${data.added} of ${data.total} songs to YouTube.`;
-        if (data.missing?.length) message += ` Not found: ${data.missing.join(", ")}.`;
+
+        let message;
+        if (data.created) {
+          message = `Created "${playlist.name}" on YouTube with ${data.added} songs.`;
+        } else if (data.added) {
+          message = `Added ${data.added} new song${data.added === 1 ? "" : "s"} to "${playlist.name}" on YouTube; ${data.already} were already there.`;
+        } else {
+          message = `"${playlist.name}" on YouTube is already up to date, all ${data.already} songs.`;
+        }
+        if (data.missing?.length) message += ` Not found on YouTube: ${data.missing.join(", ")}.`;
         if (data.error) message += ` ${data.error}`;
         notify(message, Boolean(data.error));
       } else {

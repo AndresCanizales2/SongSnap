@@ -83,7 +83,8 @@ export default function YouTubePanel({ status, setStatus, notify }) {
           <p>
             Without this, the YouTube button opens throwaway lists that YouTube
             will not let you keep. Connecting an account lets SongRadar create
-            the playlist for real. Free, but it takes a few minutes once.
+            the playlist for real, and top it up with new songs later instead
+            of making another copy. Free, but it takes a few minutes once.
           </p>
           <ol>
             <li>

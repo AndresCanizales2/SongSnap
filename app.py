@@ -664,8 +664,53 @@ def youtube_get(path: str, params: dict, token: str | None = None):
         return None
 
 
+def youtube_find_playlist(token: str, title: str) -> str | None:
+    """The account's own playlist with this name, if it already has one."""
+    wanted = title.strip().lower()
+    page = None
+    while True:
+        params = {"part": "snippet", "mine": "true", "maxResults": 50}
+        if page:
+            params["pageToken"] = page
+        data = youtube_get("/playlists", params, token)
+        if not data:
+            return None
+        for item in data.get("items", []):
+            if item.get("snippet", {}).get("title", "").strip().lower() == wanted:
+                return item.get("id")
+        page = data.get("nextPageToken")
+        if not page:
+            return None
+
+
+def youtube_playlist_video_ids(token: str, playlist_id: str) -> set[str]:
+    """What that playlist already holds, so nothing is added twice."""
+    found: set[str] = set()
+    page = None
+    while True:
+        params = {"part": "contentDetails", "playlistId": playlist_id, "maxResults": 50}
+        if page:
+            params["pageToken"] = page
+        data = youtube_get("/playlistItems", params, token)
+        if not data:
+            break
+        for item in data.get("items", []):
+            video_id = item.get("contentDetails", {}).get("videoId")
+            if video_id:
+                found.add(video_id)
+        page = data.get("nextPageToken")
+        if not page:
+            break
+    return found
+
+
 def youtube_save_playlist(playlist: dict) -> dict:
-    """Create a real playlist on the account and fill it, in order."""
+    """Put the playlist on the account: create it, or top up the one there.
+
+    Reusing an existing playlist of the same name is not only what people
+    expect, it is also what keeps the daily quota alive: reading costs 1 unit
+    per page while every song inserted costs 50.
+    """
     token = youtube_access_token()
     if not token:
         return {"error": "YouTube is not connected."}
@@ -676,30 +721,49 @@ def youtube_save_playlist(playlist: dict) -> dict:
         return {"error": "No song of this playlist could be found on YouTube."}
 
     headers = {"Authorization": f"Bearer {token}"}
-    try:
-        created = requests.post(
-            f"{YOUTUBE_API}/playlists",
-            params={"part": "snippet,status"},
-            headers=headers,
-            json={
-                "snippet": {"title": playlist["name"], "description": "Created by SongRadar"},
-                "status": {"privacyStatus": "private"},
-            },
-            timeout=25,
-        )
-    except Exception as e:
-        return {"error": f"Could not create the playlist: {e}"}
+    playlist_id = youtube_find_playlist(token, playlist["name"])
+    created_new = playlist_id is None
+    already: set[str] = set()
 
-    if created.status_code >= 400:
-        return {"error": google_error(created)}
+    if playlist_id:
+        already = youtube_playlist_video_ids(token, playlist_id)
+    else:
+        try:
+            created = requests.post(
+                f"{YOUTUBE_API}/playlists",
+                params={"part": "snippet,status"},
+                headers=headers,
+                json={
+                    "snippet": {"title": playlist["name"], "description": "Created by SongRadar"},
+                    "status": {"privacyStatus": "private"},
+                },
+                timeout=25,
+            )
+        except Exception as e:
+            return {"error": f"Could not create the playlist: {e}"}
 
-    playlist_id = created.json().get("id")
-    if not playlist_id:
-        return {"error": "YouTube did not return a playlist id."}
+        if created.status_code >= 400:
+            return {"error": google_error(created)}
+
+        playlist_id = created.json().get("id")
+        if not playlist_id:
+            return {"error": "YouTube did not return a playlist id."}
+
+    url = f"https://www.youtube.com/playlist?list={playlist_id}"
+    to_add = [v for v in ids if v not in already]
+    if not to_add:
+        return {
+            "url": url,
+            "created": False,
+            "added": 0,
+            "already": len(ids),
+            "total": len(queries),
+            "missing": missing,
+        }
 
     # One request per song, in order, so the playlist reads as the list does.
     added = 0
-    for video_id in ids:
+    for video_id in to_add:
         try:
             item = requests.post(
                 f"{YOUTUBE_API}/playlistItems",
@@ -715,8 +779,10 @@ def youtube_save_playlist(playlist: dict) -> dict:
             )
         except Exception as e:
             return {
-                "url": f"https://www.youtube.com/playlist?list={playlist_id}",
+                "url": url,
+                "created": created_new,
                 "added": added,
+                "already": len(already),
                 "total": len(queries),
                 "missing": missing,
                 "error": f"Stopped after {added} songs: {e}",
@@ -724,8 +790,10 @@ def youtube_save_playlist(playlist: dict) -> dict:
 
         if item.status_code >= 400:
             return {
-                "url": f"https://www.youtube.com/playlist?list={playlist_id}",
+                "url": url,
+                "created": created_new,
                 "added": added,
+                "already": len(already),
                 "total": len(queries),
                 "missing": missing,
                 "error": google_error(item),
@@ -733,8 +801,10 @@ def youtube_save_playlist(playlist: dict) -> dict:
         added += 1
 
     return {
-        "url": f"https://www.youtube.com/playlist?list={playlist_id}",
+        "url": url,
+        "created": created_new,
         "added": added,
+        "already": len(already),
         "total": len(queries),
         "missing": missing,
     }
