@@ -1,4 +1,4 @@
-# SongRadar 📡
+# OK SongRadar 📡
 
 **Recognizes the music playing around you or on your PC, and turns it into playlists you can play, copy, or push to YouTube and Spotify.**
 
